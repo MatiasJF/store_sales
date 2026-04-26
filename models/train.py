@@ -138,6 +138,7 @@ def train_and_evaluate(
 
     X = train_df[valid_features].values
     y = train_df[TARGET].values
+    sample_weights = _compute_sample_weights(train_df[DATE_COL])
 
     splits = _get_cv_splits(train_df)
     fold_scores = []
@@ -151,24 +152,28 @@ def train_and_evaluate(
 
         X_tr, X_val = X[train_idx], X[val_idx]
         y_tr, y_val = y[train_idx], y[val_idx]
+        w_tr = sample_weights[train_idx]
 
         model = _build_model(model_name, params)
 
         if model_name == "lightgbm":
             model.fit(
                 X_tr, np.log1p(y_tr),
+                sample_weight=w_tr,
                 eval_set=[(X_val, np.log1p(y_val))],
                 callbacks=[lgb.early_stopping(50, verbose=False)],
             )
         elif model_name == "xgboost":
             model.fit(
                 X_tr, np.log1p(y_tr),
+                sample_weight=w_tr,
                 eval_set=[(X_val, np.log1p(y_val))],
                 verbose=False,
             )
         elif model_name == "catboost":
             model.fit(
                 X_tr, np.log1p(y_tr),
+                sample_weight=w_tr,
                 eval_set=(X_val, np.log1p(y_val)),
                 early_stopping_rounds=50,
             )
@@ -188,13 +193,22 @@ def train_and_evaluate(
     }
 
 
+def _compute_sample_weights(dates: pd.Series, half_life_days: int = 180) -> np.ndarray:
+    """Exponential decay weights: recent data gets higher weight."""
+    max_date = dates.max()
+    days_ago = (max_date - dates).dt.days.values.astype(float)
+    weights = np.exp(-0.693 * days_ago / half_life_days)
+    weights = weights / weights.mean()
+    return weights
+
+
 def train_final_model(
     df: pd.DataFrame,
     feature_cols: list[str],
     model_name: str = "lightgbm",
     params: dict | None = None,
 ):
-    """Train on all training data and return the fitted model + feature list."""
+    """Train on all training data with temporal sample weighting."""
     params = params or {}
     train_df = df[df["is_train"]].copy()
     train_df = train_df[train_df[DATE_COL] >= TRAIN_START_DATE]
@@ -207,8 +221,9 @@ def train_final_model(
 
     X = train_df[valid_features].values
     y = np.log1p(train_df[TARGET].values)
+    weights = _compute_sample_weights(train_df[DATE_COL])
 
     model = _build_model(model_name, params)
-    model.fit(X, y)
+    model.fit(X, y, sample_weight=weights)
 
     return model, valid_features
