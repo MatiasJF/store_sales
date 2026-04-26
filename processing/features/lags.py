@@ -16,7 +16,7 @@ def _lag(df, col, periods, prefix=None):
 @register(name="sales_lags_safe", group="lags")
 def sales_lags_safe(df):
     """Horizon-safe lags: only lags >= FORECAST_HORIZON."""
-    for lag in [_HORIZON, 21, 28]:
+    for lag in [_HORIZON, 21, 28, 35, 42]:
         df, _ = _lag(df, TARGET, lag)
     return df
 
@@ -68,4 +68,17 @@ def expanding_mean_safe(df):
         df.groupby(_GROUP_COLS)[TARGET]
         .transform(lambda x: x.shift(_HORIZON).expanding(min_periods=1).mean())
     )
+    return df
+
+
+@register(name="sales_momentum", group="lags")
+def sales_momentum(df):
+    """Momentum: ratio of recent (14d) to long-term (60d) rolling mean."""
+    rmean_14 = df.groupby(_GROUP_COLS)[TARGET].transform(
+        lambda x: x.shift(_HORIZON).rolling(14, min_periods=1).mean()
+    )
+    rmean_60 = df.groupby(_GROUP_COLS)[TARGET].transform(
+        lambda x: x.shift(_HORIZON).rolling(60, min_periods=1).mean()
+    )
+    df["sales_momentum"] = (rmean_14 / rmean_60.replace(0, np.nan)).fillna(1.0)
     return df

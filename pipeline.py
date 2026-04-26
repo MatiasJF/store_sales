@@ -25,12 +25,21 @@ from optimizer.tracker import ExperimentTracker
 # Columns that are train-only (NaN for test) and should be excluded from features
 _EXCLUDE_COLS = {"id", TARGET, "is_train", "transactions"}
 
+# Low-value features to prune (correlation < 0.01 with target or redundant)
+_LOW_VALUE_FEATURES = {
+    "dom_sin", "dom_cos", "month_sin", "month_cos",
+    "is_work_day", "is_payday",
+    "near_holiday_7d",  # redundant with near_holiday_3d
+    "oil_pct_change_7",
+    "store_family_encoded",  # 1782-cardinality meaningless integer
+}
+
 
 def _get_numeric_features(df):
-    """Get numeric feature columns, excluding known-bad ones."""
+    """Get numeric feature columns, excluding known-bad and low-value ones."""
     return [
         c for c in df.select_dtypes(include=[np.number]).columns
-        if c not in _EXCLUDE_COLS
+        if c not in _EXCLUDE_COLS and c not in _LOW_VALUE_FEATURES
     ]
 
 
@@ -168,19 +177,49 @@ def run_pipeline():
         )
 
     # ================================================================
-    # PHASE 5: FINAL OUTPUT
+    # PHASE 5: FINAL OUTPUT (Ensemble)
     # ================================================================
     print("\n" + "=" * 60)
-    print("PHASE 5: Final Model & Submission")
+    print("PHASE 5: Final Models & Ensemble Submission")
     print("=" * 60)
 
     t0 = time.time()
+
+    # Train primary model
     final_model, final_features = train_final_model(
         df, best_features, model_name=best_model, params=best_params,
     )
-    submission = generate_submission(df, final_model, final_features)
-    print(f"  Final model trained on {len(final_features)} features ({time.time()-t0:.1f}s)")
-    print(f"  Submission: {len(submission)} rows")
+    primary_cv = train_and_evaluate(df, best_features, model_name=best_model, params=best_params)
+    primary_cv_score = primary_cv["score"]
+    print(f"  Primary ({best_model}): CV={primary_cv_score:.5f}, {len(final_features)} features")
+
+    # Train secondary model for ensemble (the other of lgbm/xgb)
+    secondary_model_name = "xgboost" if best_model == "lightgbm" else "lightgbm"
+    try:
+        secondary_cv = train_and_evaluate(df, best_features, model_name=secondary_model_name)
+        secondary_cv_score = secondary_cv["score"]
+        secondary_model, secondary_features = train_final_model(
+            df, best_features, model_name=secondary_model_name,
+        )
+        print(f"  Secondary ({secondary_model_name}): CV={secondary_cv_score:.5f}")
+
+        models_for_ensemble = [
+            (final_model, final_features, primary_cv_score),
+            (secondary_model, secondary_features, secondary_cv_score),
+        ]
+        w_total = (1/primary_cv_score + 1/secondary_cv_score)
+        w1 = (1/primary_cv_score) / w_total
+        w2 = (1/secondary_cv_score) / w_total
+        print(f"  Ensemble weights: {best_model}={w1:.3f}, {secondary_model_name}={w2:.3f}")
+    except Exception as e:
+        print(f"  Secondary model failed ({e}), using single model")
+        models_for_ensemble = None
+
+    submission = generate_submission(
+        df, final_model, final_features,
+        models_for_ensemble=models_for_ensemble,
+    )
+    print(f"  Submission: {len(submission)} rows ({time.time()-t0:.1f}s)")
     print(f"  Predictions range: {submission['sales'].min():.2f} - {submission['sales'].max():.2f}")
     print(f"  Predictions mean: {submission['sales'].mean():.2f}")
 
@@ -190,6 +229,7 @@ def run_pipeline():
         "params": best_params,
         "features": final_features,
         "baseline_score": baseline_score,
+        "ensemble": bool(models_for_ensemble),
         "best_cv_score": tracker.best()["score"] if tracker.best() else None,
     }
     with open(OUTPUT_DIR / "best_config.json", "w") as f:

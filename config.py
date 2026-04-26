@@ -36,11 +36,14 @@ MODEL_TIERS = {
 # -- Forecast horizon --
 FORECAST_HORIZON = 16  # 16 dates in test (Aug 16-31)
 
+# -- Training data window --
+TRAIN_START_DATE = "2015-08-01"  # ~2 years of data; drop stale early history
+
 # -- Cross-validation --
 CV_CONFIG = {
-    "n_splits": 3,
+    "n_splits": 5,
     "forecast_horizon": FORECAST_HORIZON,
-    "gap": 0,
+    "gap": 16,  # simulate real forecast gap between train cutoff and val start
 }
 
 # -- Optimizer --

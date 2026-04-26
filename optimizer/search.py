@@ -136,24 +136,24 @@ def hyperparam_search(
             params = {
                 "n_estimators": trial.suggest_int("n_estimators", 200, 1500),
                 "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2, log=True),
-                "max_depth": trial.suggest_int("max_depth", 4, 12),
+                "max_depth": trial.suggest_int("max_depth", 4, 8),
                 "num_leaves": trial.suggest_int("num_leaves", 15, 127),
                 "subsample": trial.suggest_float("subsample", 0.6, 1.0),
                 "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
                 "min_child_samples": trial.suggest_int("min_child_samples", 5, 100),
-                "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 10.0, log=True),
-                "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 10.0, log=True),
+                "reg_alpha": trial.suggest_float("reg_alpha", 0.01, 100.0, log=True),
+                "reg_lambda": trial.suggest_float("reg_lambda", 0.01, 100.0, log=True),
             }
         elif model_name == "xgboost":
             params = {
                 "n_estimators": trial.suggest_int("n_estimators", 200, 1500),
                 "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2, log=True),
-                "max_depth": trial.suggest_int("max_depth", 4, 12),
+                "max_depth": trial.suggest_int("max_depth", 4, 8),
                 "subsample": trial.suggest_float("subsample", 0.6, 1.0),
                 "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
                 "min_child_weight": trial.suggest_int("min_child_weight", 1, 50),
-                "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 10.0, log=True),
-                "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 10.0, log=True),
+                "reg_alpha": trial.suggest_float("reg_alpha", 0.01, 100.0, log=True),
+                "reg_lambda": trial.suggest_float("reg_lambda", 0.01, 100.0, log=True),
             }
         elif model_name == "catboost":
             params = {

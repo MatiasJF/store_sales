@@ -64,3 +64,15 @@ def store_family_target_enc(df):
         lambda x: x.shift(_HORIZON).expanding(min_periods=1).mean()
     )
     return df
+
+
+@register(name="month_family_seasonality", group="target_encoding")
+def month_family_seasonality(df):
+    """Average sales by family+month (captures back-to-school, holiday shopping)."""
+    df["_month"] = df[DATE_COL].dt.month
+    df["month_family_mean_sales"] = (
+        df.groupby([FAMILY_COL, "_month"])[TARGET]
+        .transform(lambda x: x.shift(_HORIZON).expanding(min_periods=1).mean())
+    )
+    df.drop(columns=["_month"], inplace=True)
+    return df

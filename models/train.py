@@ -15,7 +15,7 @@ import pandas as pd
 import lightgbm as lgb
 import xgboost as xgb
 import catboost as cb
-from config import TARGET, DATE_COL, SEED, CV_CONFIG, TIME_BUDGET
+from config import TARGET, DATE_COL, SEED, CV_CONFIG, TIME_BUDGET, TRAIN_START_DATE
 
 
 def rmsle(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -30,6 +30,7 @@ def _get_cv_splits(df: pd.DataFrame) -> list[tuple[np.ndarray, np.ndarray]]:
     dates = sorted(train_df[DATE_COL].unique())
     horizon = CV_CONFIG["forecast_horizon"]
     n_splits = CV_CONFIG["n_splits"]
+    gap = CV_CONFIG.get("gap", 0)
 
     splits = []
     for i in range(n_splits):
@@ -39,7 +40,7 @@ def _get_cv_splits(df: pd.DataFrame) -> list[tuple[np.ndarray, np.ndarray]]:
             break
 
         val_dates = set(dates[val_start_idx:val_end_idx])
-        train_dates = set(dates[:val_start_idx])
+        train_dates = set(dates[:max(0, val_start_idx - gap)])
 
         train_mask = train_df[DATE_COL].isin(train_dates).values
         val_mask = train_df[DATE_COL].isin(val_dates).values
@@ -116,6 +117,7 @@ def train_and_evaluate(
     """
     params = params or {}
     train_df = df[df["is_train"]].copy()
+    train_df = train_df[train_df[DATE_COL] >= TRAIN_START_DATE]
 
     # Validate features exist and are numeric
     valid_features = [
@@ -195,6 +197,7 @@ def train_final_model(
     """Train on all training data and return the fitted model + feature list."""
     params = params or {}
     train_df = df[df["is_train"]].copy()
+    train_df = train_df[train_df[DATE_COL] >= TRAIN_START_DATE]
 
     valid_features = [
         c for c in feature_cols

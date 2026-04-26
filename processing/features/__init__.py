@@ -56,3 +56,4 @@ from processing.features import promotions
 from processing.features import interactions
 from processing.features import target_encoding
 from processing.features import yearly
+from processing.features import zero_model

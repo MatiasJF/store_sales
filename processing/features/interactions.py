@@ -6,14 +6,11 @@ _GROUP_COLS = [STORE_COL, FAMILY_COL]
 _HORIZON = FORECAST_HORIZON
 
 
-@register(name="store_family_id", group="interactions")
-def store_family_id(df):
-    """Combined store-family identifier for per-series patterns."""
-    df["store_family"] = (
-        df[STORE_COL].astype(str) + "_" + df[FAMILY_COL].astype(str)
-    )
-    df["store_family_encoded"] = df["store_family"].astype("category").cat.codes
-    df.drop(columns=["store_family"], inplace=True)
+@register(name="store_day_promo_count", group="interactions")
+def store_day_promo_count(df):
+    """Total promo count across all families for same store+date (traffic proxy)."""
+    promo_counts = df.groupby([STORE_COL, "date"])["onpromotion"].transform("sum")
+    df["store_day_promo_count"] = promo_counts
     return df
 
 
